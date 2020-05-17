@@ -1,97 +1,115 @@
 package chatclient;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.net.UnknownHostException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Properties;
+import java.util.Scanner;
+
 /**
  *
  * @author Petar Kresoja
  */
-import java.io.*;
-import java.net.*;
-import java.util.*;
-
 public class ChatClient {
 
-    // TCP PORT
-    final static int SERVER_PORT = 765;
+    private static final DateFormat DATE_FORMAT = new SimpleDateFormat("[HH:mm] ");
 
     public static void main(String[] args) throws UnknownHostException, IOException {
-        
-        Scanner scn = new Scanner(System.in);
-        System.out.println("ChatClient starting...");
 
-        // UCITAVA IP ADRESU SERVERA
-        System.out.print("Type in server IP adress: ");
-        String ipAdress = scn.nextLine();
+        String address = null;
+        String username = null;
+        int port = 0;
 
-        // TRAZI SERVER NA TOJ ADRESI
-        InetAddress ip = InetAddress.getByName(ipAdress);
+        try {
+            File config = new File("config.properties");
+            Properties prop = new Properties();
+            if (!config.exists()) {
+                try (OutputStream output = new FileOutputStream(config)) {
+                    prop.setProperty("host.adress", "localhost");
+                    prop.setProperty("host.port", "765");
+                    prop.setProperty("username", "username");
+                    prop.store(output, "SimpleChat configuration file" + System.lineSeparator() + "Created by: Pequla ( https://pequla.github.io/ )");
+                }
+            }
+            try (InputStream input = new FileInputStream(config)) {
+                prop.load(input);
+                address = prop.getProperty("host.adress");
+                port = Integer.valueOf(prop.getProperty("host.port"));
+                username = prop.getProperty("username");
+            }
+        } catch (IOException ex) {
+            ex.printStackTrace(System.out);
+        }
 
-        // POVEZUJE SE 
-        Socket s = new Socket(ip, SERVER_PORT);
-
-        // PRIMA I/O STREAM 
+        consoleOut("ChatClient starting...");
+        Socket s = new Socket(InetAddress.getByName(address), port);
         DataInputStream dis = new DataInputStream(s.getInputStream());
         DataOutputStream dos = new DataOutputStream(s.getOutputStream());
 
-        // PRIHVATA IME 
-        while (true) {
-            System.out.print("Input your name: ");
-            String clientName = scn.nextLine();
-            dos.writeUTF(clientName);
-            clientName = dis.readUTF();
-            if (clientName.equals("usernameError")) {
-                System.out.println("Invalid or already taken username, try again");
-            } else {
-                System.out.println("Client name set to: " + clientName);
-                break;
-            }
-        }
+        dos.writeUTF(username);
+        if (dis.readUTF().equals("NAME OK")) {
 
-        // POVEZAO SE
-        System.out.println("Connected to server " + ipAdress + " !");
-        System.out.println("Send messages in format <message>/<recipient> !");
-        System.out.println("Type in logout to EXIT");
+            Scanner scn = new Scanner(System.in);
 
-        // SLANJE PORUKA 
-        Thread sendMessage = new Thread(() -> {
-            while (true) {
+            consoleOut("Connected to the server...");
+            consoleOut("Type in /logout to EXIT");
 
-                // PROVERAVA PORUKU
-                String msg = scn.nextLine();
-                System.out.println(">> You: " + msg);
-
-                try {
-                    // ISPIS U OUTPUT STREAM
-                    dos.writeUTF(msg);
-
-                    // LOGOUT/EXIT
-                    if (msg.equals("logout")) {
-                        System.exit(0);
+            Thread sendMessage = new Thread(() -> {
+                while (true) {
+                    try {
+                        String msg = scn.nextLine().trim();
+                        if (msg.length() != 0) {
+                            dos.writeUTF(msg);
+                            if (msg.equals("/logout")) {
+                                System.exit(0);
+                            }
+                        }
+                    } catch (IOException ex) {
+                        errMessage(ex);
+                        break;
                     }
-
-                } catch (IOException ex) {
-                    // STOP
-                    System.err.println("Server dropped connection");
-                    System.exit(0);
                 }
-            }
-        });
+            });
 
-        // CITANJE PORUKA
-        Thread readMessage = new Thread(() -> {
-            while (true) {
-                try {
-                    // CITA PORUKU POSLATU OVOM KLIJETU
-                    String msg = dis.readUTF();
-                    System.out.println(msg);
-                } catch (IOException ex) {
-                    // STOP
-                    System.err.println("Server dropped connection");
-                    System.exit(0);
+            Thread readMessage = new Thread(() -> {
+                while (true) {
+                    try {
+                        consoleOut(dis.readUTF());
+                    } catch (IOException ex) {
+                        errMessage(ex);
+                        break;
+                    }
                 }
-            }
-        });
+            });
 
-        sendMessage.start();
-        readMessage.start();
+            sendMessage.start();
+            readMessage.start();
+        } else {
+            consoleOut("Invalid or already taken username !");
+            consoleOut("Please select another one in config.properties !");
+            System.exit(0);
+        }
+    }
+
+    public static void consoleOut(String text) {
+        Date date = new Date();
+        System.out.println(DATE_FORMAT.format(date) + text);
+    }
+
+    private static void errMessage(Exception ex) {
+        System.out.println("Unexpected error occured !");
+        System.out.println("More info: " + ex.getMessage());
+        System.exit(0);
     }
 }

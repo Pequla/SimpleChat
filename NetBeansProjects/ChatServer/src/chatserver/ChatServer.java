@@ -1,9 +1,12 @@
 package chatserver;
 
-import java.io.*;
-import java.net.*;
-import java.text.*;
-import java.util.*;
+import java.io.IOException;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Vector;
 
 /**
  *
@@ -11,52 +14,36 @@ import java.util.*;
  */
 public class ChatServer {
 
-    // CUVA KLIJENTE U VEKTORU
-    public static Vector<ClientHandler> ar = new Vector<>();
+    public static Vector<ClientHandler> clients = new Vector<>();
+    private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
 
-    public static void main(String[] args) throws IOException {
-
-        // OTVARA TCP PORT 765
-        ServerSocket ss = new ServerSocket(765);
-        Socket s;
-
-        // MSG
-        consoleOut("ChatServer started");
-
-        // SERVER LOOP
-        while (true) {
-
-            // PRIHVATA KLIJENTA
-            s = ss.accept();
-            consoleOut("New client request received: " + s);
-
-            // NOVI HANDELER OBJEKAT
-            consoleOut("Creating a new handler...");
-            ClientHandler mtch = new ClientHandler(s);
-
-            // PRAVI NOVI THREAD ZA HANDELER 
-            Thread t = new Thread(mtch);
-            consoleOut("Added to active client list");
-
-            // DODAJE KLIJENTA U AKTIVNU LISTU
-            ar.add(mtch);
-
-            // ZAPOCNI THREAD 
-            t.start();
-
+    public static void main(String[] args) {
+        infoOut("Server started...");
+        try {
+            ServerSocket ss = new ServerSocket(765);
+            Socket s;
+            while (true) {
+                infoOut("Waiting for client requests...");
+                s = ss.accept();
+                infoOut("New client request: " + s);
+                ClientHandler ch = new ClientHandler(s);
+                Thread t = new Thread(ch);
+                clients.add(ch);
+                t.start();
+                infoOut("Client " + ch.getName() + " connected successfuly");
+            }
+        } catch (IOException ex) {
+            errorOut(ex);
         }
     }
 
-    // DRY SISTEMSKI IZLAZ
-    public static void consoleOut(String consoleOut) {
-
-        // ISPIS DATUMA I VREMENA
-        // 2019/12/01 12:15:48
-        DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+    public static void infoOut(String output) {
         Date date = new Date();
+        System.out.println("[INFO: " + DATE_FORMAT.format(date) + "] >> " + output);
+    }
 
-        // FORMIRA IZLAZ
-        System.out.println(">> [" + dateFormat.format(date) + "] " + consoleOut);
-
+    public static void errorOut(Exception ex) {
+        Date date = new Date();
+        System.err.println("[ERROR: " + DATE_FORMAT.format(date) + "] >> Internal exception occurred, " + ex.getMessage());
     }
 }
